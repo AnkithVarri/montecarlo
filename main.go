@@ -120,3 +120,75 @@ func printBenchRow(res Result, serial time.Duration) {
 func main() {
 	fmt.Println("Monte Carlo Option Pricer")
 }
+
+
+func fmtPrice(v float64) string {
+	return strconv.FormatFloat(v, 'f', 6, 64)
+}
+
+func fmtInput(v float64) string {
+	s := strconv.FormatFloat(v, 'f', 6, 64) // then strip 100.000000 -> 100
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimRight(s, ".")
+	if s == "" || s == "-" {
+		return "0"
+	}
+	return s
+}
+
+func fmtSigned(v float64) string {
+	return fmt.Sprintf("%+.6f", v)
+}
+
+func fmtPct(v float64) string {
+	return fmt.Sprintf("%.2f%%", v*100)
+}
+
+func fmtYears(v float64) string {
+	if v == 1 {
+		return "1.00 year"
+	}
+	return fmt.Sprintf("%.2f years", v)
+}
+
+func fmtDur(d time.Duration) string {
+	switch {
+	case d < time.Millisecond:
+		return fmt.Sprintf("%.1f µs", float64(d)/float64(time.Microsecond))
+	case d < time.Second:
+		return fmt.Sprintf("%.1f ms", float64(d)/float64(time.Millisecond))
+	default:
+		return fmt.Sprintf("%.2f s", d.Seconds())
+	}
+}
+
+func fmtRate(v float64) string {
+	switch {
+	case v >= 1e6:
+		return fmt.Sprintf("%.2fM", v/1e6)
+	case v >= 1e3:
+		return fmt.Sprintf("%.2fK", v/1e3)
+	default:
+		return fmt.Sprintf("%.0f", v)
+	}
+}
+
+func withCommas(n int) string {
+	sign := ""
+	if n < 0 {
+		sign = "-"
+		n = -n
+	}
+	s := strconv.Itoa(n)
+	lead := len(s) % 3
+	if lead == 0 {
+		lead = 3
+	}
+	var b strings.Builder
+	b.WriteString(s[:lead])
+	for i := lead; i < len(s); i += 3 {
+		b.WriteByte(',')
+		b.WriteString(s[i : i+3])
+	}
+	return sign + b.String()
+}
