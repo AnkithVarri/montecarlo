@@ -1,9 +1,42 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math"
+	"os"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
 )
+
+func main() {
+	p, mode, bench, err := parseFlags()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(2)
+	}
+	if bench {
+		if err := runBench(p); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	res, err := Price(p, mode)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+	analytic, err := AnalyticCall(p)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+	printPrice(p, res, analytic)
+}
 
 func printPrice(p Params, res Result, analytic float64) {
 	fmt.Println("European call — Black–Scholes Monte Carlo")
@@ -115,10 +148,6 @@ func printBenchRow(res Result, serial time.Duration) {
 	}
 	fmt.Printf("%-8s  %7d  %12s  %10s  %8.2fx  %12s\n",
 		res.Mode, res.Workers, fmtDur(res.Elapsed), fmtRate(res.PathsPerSec), speedup, fmtPrice(res.Price))
-}
-
-func main() {
-	fmt.Println("Monte Carlo Option Pricer")
 }
 
 
