@@ -225,4 +225,111 @@ func (g *lockedRNG) NormFloat64() float64 {
 }
 
 
+// Type param so NormFloat64 can inline. An interface can't.
+func simulate[R interface{ NormFloat64() float64 }](m model, rng R, n int) (sum, sumSq float64) {
+	spot := m.spot
+	strike := m.strike
+	drift := m.drift
+	diffuse := m.diffuse
+	for i := 0; i < n; i++ {
+		z := rng.NormFloat64()
+		sT := spot * math.Exp(drift+diffuse*z)
+		payoff := sT - strike
+		if payoff < 0 {
+			payoff = 0
+		}
+		sum += payoff
+		sumSq += payoff * payoff
+	}
+	return sum, sumSq
+}
+
+func newResult(mode Mode, m model, sum, sumSq float64, n, workers int, elapsed time.Duration) Result {
+	mean := sum / float64(n)
+	price := m.disc * mean
+
+	var stderr float64
+	if n > 1 {
+		m2 := sumSq - sum*mean
+		if m2 < 1e-12*math.Abs(sumSq) {
+			m2 = 0 // zero-vol paths are identical; this is float dust
+		}
+		variance := m2 / float64(n-1)
+		stderr = m.disc * math.Sqrt(variance/float64(n))
+	}
+
+	var perSec float64
+	if elapsed > 0 {
+		perSec = float64(n) / elapsed.Seconds()
+	}
+	return Result{
+		Mode:        mode,
+		Price:       price,
+		StdErr:      stderr,
+		Paths:       n,
+		Workers:     workers,
+		Elapsed:     elapsed,
+		PathsPerSec: perSec,
+	}
+}
+
+func workerCount(p Params) int {
+	n := p.Workers
+	if n < 1 {
+		n = runtime.NumCPU()
+	}
+	if n > p.Paths {
+		n = p.Paths // extra workers would just get an empty block
+	}
+	return n
+}
+
+func partition(paths, workers int) []int {
+	counts := make([]int, workers) // first `extra` workers take the remainder
+	base := paths / workers
+	extra := paths % workers
+	for i := 0; i < workers; i++ {
+		counts[i] = base
+		if i < extra {
+			counts[i]++
+		}
+	}
+	return counts
+}
+
+// Separate stream per worker. One shared Rand races.
+func streamSeed(base int64, worker int) (uint64, uint64) {
+	x := uint64(base) ^ 0xA0761D6478BD642F
+	x += uint64(worker) * 0x9E3779B97F4A7C15
+	return splitmix64(&x), splitmix64(&x)
+}
+
+func splitmix64(x *uint64) uint64 {
+	*x += 0x9E3779B97F4A7C15
+	z := *x
+	z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9
+	z = (z ^ (z >> 27)) * 0x94D049BB133111EB
+	return z ^ (z >> 31)
+}
+
+func analytic(p Params) float64 {
+	// d1 divides by σ√T.
+	if p.Years == 0 {
+		return math.Max(0, p.Spot-p.Strike)
+	}
+	discK := p.Strike * math.Exp(-p.Rate*p.Years)
+	if p.Vol == 0 {
+		return math.Max(0, p.Spot-discK)
+	}
+	sqrtT := math.Sqrt(p.Years)
+	d1 := (math.Log(p.Spot/p.Strike) + (p.Rate+0.5*p.Vol*p.Vol)*p.Years) / (p.Vol * sqrtT)
+	d2 := d1 - p.Vol*sqrtT
+	return p.Spot*normCDF(d1) - discK*normCDF(d2)
+}
+
+func normCDF(x float64) float64 {
+	return 0.5 * math.Erfc(-x/math.Sqrt2) // Φ(x)
+}
+
+
 
