@@ -47,6 +47,76 @@ func printAgreement(price, stderr, analytic float64) {
 	}
 }
 
+
+func runBench(p Params) error {
+	analytic := analytic(p)
+	fmt.Println("Black–Scholes Monte Carlo")
+	fmt.Println()
+	fmt.Printf("  spot %s    strike %s    rate %s    vol %s    expiry %s\n",
+		fmtInput(p.Spot), fmtInput(p.Strike), fmtPct(p.Rate), fmtPct(p.Vol), fmtYears(p.Years))
+	fmt.Printf("  paths %s    seed %d    CPUs %d\n", withCommas(p.Paths), p.Seed, runtime.NumCPU())
+	fmt.Printf("  analytic %s\n", fmtPrice(analytic))
+	fmt.Println()
+
+	warm := p // first row was cold and looked slower than it is
+	warm.Paths = min(p.Paths, 50_000)
+	warm.Workers = 2
+	if _, err := Price(warm, ModePrivate); err != nil {
+		return err
+	}
+
+	fmt.Printf("%-8s  %7s  %12s  %10s  %9s  %12s\n",
+		"mode", "workers", "time", "paths/sec", "speedup", "price")
+
+	serial := p
+	serial.Workers = 1
+	base, err := Price(serial, ModeSerial)
+	if err != nil {
+		return err
+	}
+	printBenchRow(base, base.Elapsed)
+
+	for _, workers := range []int{1, 2, 4, 8} {
+		if workers > p.Paths {
+			continue // would clamp and repeat a smaller row
+		}
+		run := p
+		run.Workers = workers
+		res, err := Price(run, ModePrivate)
+		if err != nil {
+			return err
+		}
+		printBenchRow(res, base.Elapsed)
+	}
+	for _, workers := range []int{1, 2, 4, 8} {
+		if workers > p.Paths {
+			continue
+		}
+		run := p
+		run.Workers = workers
+		res, err := Price(run, ModeMutex)
+		if err != nil {
+			return err
+		}
+		printBenchRow(res, base.Elapsed)
+	}
+
+	fmt.Println()
+	fmt.Println("Private gives each worker its own generator, so those prices differ by sampling noise.")
+	fmt.Println("Mutex shares one generator and locks every draw. The price matches serial; extra workers add contention.")
+	fmt.Println("Speedup is serial time divided by that row's time.")
+	return nil
+}
+
+func printBenchRow(res Result, serial time.Duration) {
+	speedup := 0.0
+	if res.Elapsed > 0 {
+		speedup = float64(serial) / float64(res.Elapsed)
+	}
+	fmt.Printf("%-8s  %7d  %12s  %10s  %8.2fx  %12s\n",
+		res.Mode, res.Workers, fmtDur(res.Elapsed), fmtRate(res.PathsPerSec), speedup, fmtPrice(res.Price))
+}
+
 func main() {
 	fmt.Println("Monte Carlo Option Pricer")
 }
