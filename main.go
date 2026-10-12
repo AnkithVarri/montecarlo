@@ -170,9 +170,6 @@ func runBench(p Params) error {
 	}
 
 	fmt.Println()
-	fmt.Println("Private gives each worker its own generator, so those prices differ by sampling noise.")
-	fmt.Println("Mutex shares one generator and locks every draw. The price matches serial; extra workers add contention.")
-	fmt.Println("Speedup is serial time divided by that row's time.")
 	return nil
 }
 
