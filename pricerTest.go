@@ -127,3 +127,79 @@ func TestReproducible(t *testing.T) {
 		t.Fatalf("same seed produced %.16f and %.16f", a.Price, b.Price)
 	}
 }
+
+func TestPartition(t *testing.T) {
+	got := partition(10, 4)
+	want := []int{3, 3, 2, 2}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d", len(got), len(want))
+	}
+	sum := 0
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("partition = %v, want %v", got, want)
+		}
+		sum += got[i]
+	}
+	if sum != 10 {
+		t.Fatalf("sum = %d, want 10", sum)
+	}
+}
+
+func TestRejectsBadInputs(t *testing.T) {
+	p := textbook()
+	p.Spot = 0
+	if _, err := Price(p, ModeSerial); err == nil {
+		t.Fatal("expected an error for spot 0")
+	}
+	p = textbook()
+	p.Paths = 0
+	if _, err := Price(p, ModeSerial); err == nil {
+		t.Fatal("expected an error for 0 paths")
+	}
+	if _, err := ParseMode("gpu"); err == nil {
+		t.Fatal("expected an error for an unknown mode")
+	}
+}
+
+var benchSink float64
+
+func BenchmarkSerial(b *testing.B) {
+	benchMode(b, ModeSerial, 1)
+}
+
+func BenchmarkPrivate(b *testing.B) {
+	for _, workers := range []int{1, 2, 4, 8} {
+		b.Run(workersName(workers), func(b *testing.B) {
+			benchMode(b, ModePrivate, workers)
+		})
+	}
+}
+
+func BenchmarkMutex(b *testing.B) {
+	for _, workers := range []int{1, 2, 4, 8} {
+		b.Run(workersName(workers), func(b *testing.B) {
+			benchMode(b, ModeMutex, workers)
+		})
+	}
+}
+
+func workersName(n int) string {
+	return fmt.Sprintf("workers=%d", n)
+}
+
+func benchMode(b *testing.B, mode Mode, workers int) {
+	p := textbook()
+	p.Paths = 100_000
+	p.Workers = workers
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		res, err := Price(p, mode)
+		if err != nil {
+			b.Fatal(err)
+		}
+		benchSink = res.Price // otherwise the compiler drops the call
+	}
+	b.ReportMetric(float64(p.Paths)*float64(b.N)/b.Elapsed().Seconds(), "paths/s")
+}
