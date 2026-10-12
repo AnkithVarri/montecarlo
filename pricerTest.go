@@ -61,3 +61,69 @@ func TestZeroVolMatchesForwardIntrinsic(t *testing.T) {
 }
 
 
+func TestOneWorkerModesAgree(t *testing.T) {
+	// Same seed, one worker: all three modes consume one stream.
+	p := textbook()
+	p.Paths = 20_000
+	p.Workers = 1
+
+	serial, err := Price(p, ModeSerial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, err := Price(p, ModePrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared, err := Price(p, ModeMutex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if serial.Price != private.Price || serial.Price != shared.Price {
+		t.Fatalf("one-worker prices differ: serial %.16f private %.16f mutex %.16f",
+			serial.Price, private.Price, shared.Price)
+	}
+	if private.Workers != 1 || shared.Workers != 1 {
+		t.Fatalf("workers = private %d mutex %d, want 1", private.Workers, shared.Workers)
+	}
+}
+
+func TestParallelNearAnalytic(t *testing.T) {
+	p := textbook()
+	p.Paths = 200_000
+	p.Workers = 4
+	res, err := Price(p, ModePrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	analytic, err := AnalyticCall(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StdErr <= 0 {
+		t.Fatal("expected a positive standard error")
+	}
+	if math.Abs(res.Price-analytic) > 6*res.StdErr {
+		t.Fatalf("price %.6f is %.1f stderr from analytic %.6f",
+			res.Price, math.Abs(res.Price-analytic)/res.StdErr, analytic)
+	}
+	if res.Workers != 4 {
+		t.Fatalf("workers = %d, want 4", res.Workers)
+	}
+}
+
+func TestReproducible(t *testing.T) {
+	p := textbook()
+	p.Workers = 4
+	a, err := Price(p, ModePrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := Price(p, ModePrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Price != b.Price {
+		t.Fatalf("same seed produced %.16f and %.16f", a.Price, b.Price)
+	}
+}
