@@ -100,8 +100,7 @@ func finite(name string, v float64) error {
 	return nil
 }
 
-
-ype Result struct {
+type Result struct {
 	Mode        Mode
 	Price       float64
 	StdErr      float64
@@ -224,7 +223,6 @@ func (g *lockedRNG) NormFloat64() float64 {
 	return z
 }
 
-
 // Type param so NormFloat64 can inline. An interface can't.
 func simulate[R interface{ NormFloat64() float64 }](m model, rng R, n int) (sum, sumSq float64) {
 	spot := m.spot
@@ -330,6 +328,3 @@ func analytic(p Params) float64 {
 func normCDF(x float64) float64 {
 	return 0.5 * math.Erfc(-x/math.Sqrt2) // Φ(x)
 }
-
-
-

@@ -38,6 +38,42 @@ func main() {
 	printPrice(p, res, analytic)
 }
 
+func parseFlags() (Params, Mode, bool, error) {
+	spot := flag.Float64("spot", 100, "current price")
+	strike := flag.Float64("strike", 100, "strike price")
+	rate := flag.Float64("rate", 0.05, "risk-free rate (0.05 = 5%)")
+	vol := flag.Float64("vol", 0.2, "volatility (0.2 = 20%)")
+	years := flag.Float64("years", 1, "time to expiry in years")
+	paths := flag.Int("paths", 100_000, "Monte Carlo paths")
+	workers := flag.Int("workers", 0, "goroutines (0 = one per CPU)")
+	seed := flag.Int64("seed", 1, "RNG seed")
+	modeName := flag.String("mode", "private", "serial, private, or mutex")
+	bench := flag.Bool("bench", false, "compare serial, private, and mutex")
+	flag.Parse()
+
+	if flag.NArg() > 0 {
+		return Params{}, 0, false, fmt.Errorf("unexpected arguments: %s", strings.Join(flag.Args(), " "))
+	}
+	mode, err := ParseMode(*modeName)
+	if err != nil {
+		return Params{}, 0, false, err
+	}
+	p := Params{
+		Spot:    *spot,
+		Strike:  *strike,
+		Rate:    *rate,
+		Vol:     *vol,
+		Years:   *years,
+		Paths:   *paths,
+		Workers: *workers,
+		Seed:    *seed,
+	}
+	if err := p.validate(); err != nil {
+		return Params{}, 0, false, err
+	}
+	return p, mode, *bench, nil
+}
+
 func printPrice(p Params, res Result, analytic float64) {
 	fmt.Println("European call — Black–Scholes Monte Carlo")
 	fmt.Println()
@@ -79,7 +115,6 @@ func printAgreement(price, stderr, analytic float64) {
 		fmt.Println("Closed-form price is printed above as analytic.")
 	}
 }
-
 
 func runBench(p Params) error {
 	analytic := analytic(p)
@@ -149,7 +184,6 @@ func printBenchRow(res Result, serial time.Duration) {
 	fmt.Printf("%-8s  %7d  %12s  %10s  %8.2fx  %12s\n",
 		res.Mode, res.Workers, fmtDur(res.Elapsed), fmtRate(res.PathsPerSec), speedup, fmtPrice(res.Price))
 }
-
 
 func fmtPrice(v float64) string {
 	return strconv.FormatFloat(v, 'f', 6, 64)

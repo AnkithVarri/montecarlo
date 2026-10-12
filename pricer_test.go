@@ -19,7 +19,6 @@ func textbook() Params {
 	}
 }
 
-
 func TestAnalyticCall(t *testing.T) {
 	// Textbook case: S = K = 100, r = 5%, σ = 20%, T = 1.
 	got, err := AnalyticCall(textbook())
@@ -59,7 +58,6 @@ func TestZeroVolMatchesForwardIntrinsic(t *testing.T) {
 		}
 	}
 }
-
 
 func TestOneWorkerModesAgree(t *testing.T) {
 	// Same seed, one worker: all three modes consume one stream.
